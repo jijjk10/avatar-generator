@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>开源头像生成器</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5/500.css">
+  <style>
+    /* ===== CSS Variables (Light/ Dark follow system) ===== */
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #f5f5f5;
+      --bg-tertiary: #eeeeee;
+      --text: #1a1a1a;
+      --text-secondary: #666666;
+      --text-tertiary: #999999;
+      --border: #e0e0e0;
+      --accent: #3B82F6;
+      --accent-hover: #2563eb;
+      --slider-track: #d4d4d4;
+      --slider-fill: #3B82F6;
+      --card-bg: #f9f9f9;
+      --card-hover: #f0f0f0;
+      --overlay: rgba(0,0,0,0.6);
+      --danger: #ef4444;
+      --success: #22c55e;
+      --tab-active-bg: #ffffff;
+      --dot-color: #22c55e;
+      --shadow: none;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1a1a;
+        --bg-secondary: #252525;
+        --bg-tertiary: #333333;
+        --text: #e5e5e5;
+        --text-secondary: #999999;
+        --text-tertiary: #777777;
+        --border: #333333;
+        --accent: #60a5fa;
+        --accent-hover: #3b82f6;
+        --slider-track: #444444;
+        --slider-fill: #60a5fa;
+        --card-bg: #2a2a2a;
+        --card-hover: #353535;
+        --overlay: rgba(0,0,0,0.8);
+        --tab-active-bg: #2a2a2a;
+        --dot-color: #4ade80;
+      }
+    }
+
+    /* ===== Reset & Base ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { -webkit-text-size-adjust: 100%; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    /* ===== Header ===== */
+    header {
+      text-align: center;
+      padding: 24px 16px 8px;
+      width: 100%;
+      max-width: 960px;
+    }
+    header h1 {
+      font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      font-size: 1.6rem;
+      font-weight: 500;
+      color: var(--text);
+      letter-spacing: 0.05em;
+    }
+    header .author {
+      font-size: 0.8rem;
+      color: var(--text-tertiary);
+      margin-top: 4px;
+    }
+
+    /* ===== Main Layout ===== */
+    main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      width: 100%;
+      max-width: 960px;
+      padding: 16px 16px 40px;
+      flex: 1;
+    }
+
+    /* Desktop: left-right split */
+    @media (min-width: 769px) {
+      main {
+        flex-direction: row;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 40px;
+      }
+    }
+
+    /* Mobile landscape: left-right split */
+    @media (orientation: landscape) and (max-height: 500px) {
+      main {
+        flex-direction: row;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 24px;
+        padding: 8px 16px 16px;
+      }
+      header { padding: 8px 16px 4px; }
+      header h1 { font-size: 1.2rem; }
+    }
+
+    /* ===== Preview Section ===== */
+    .preview-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .preview-wrapper {
+      width: min(360px, 75vw);
+      height: min(360px, 75vw);
+      border-radius: 50%;
+      overflow: hidden;
+      background: var(--bg-secondary);
+      position: relative;
+      transition: border-radius 0.2s;
+    }
+    .preview-wrapper canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Loading spinner inside preview */
+    .preview-loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: var(--bg-secondary);
+      border-radius: 50%;
+      z-index: 2;
+      transition: opacity 0.3s;
+    }
+    .preview-loading.hidden { opacity: 0; pointer-events: none; }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .preview-loading p {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .current-scheme {
+      font-size: 0.8rem;
+      color: var(--text-tertiary);
+      min-height: 1.2em;
+      text-align: center;
+    }
+
+    /* ===== Controls Section ===== */
+    .controls-section {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      width: 100%;
+      max-width: 400px;
+      min-width: 280px;
+      flex: 1;
+    }
+
+    /* Name Input */
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .control-group label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    #name-input {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 1.2rem;
+      font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      text-align: center;
+      letter-spacing: 0.3em;
+      border: 2px solid var(--border);
+      border-radius: 24px;
+      background: var(--bg-secondary);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    #name-input:focus { border-color: var(--accent); }
+    .name-hint {
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      text-align: center;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--bg-tertiary);
+      border-radius: 24px;
+      padding: 4px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab {
+      flex: 1;
+      min-width: fit-content;
+      white-space: nowrap;
+      padding: 10px 16px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      border: none;
+      border-radius: 20px;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      justify-content: center;
+    }
+    .tab.active {
+      background: var(--tab-active-bg);
+      color: var(--text);
+    }
+    .tab-dot {
+      font-size: 0.5rem;
+      color: var(--dot-color);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .tab-dot.show { opacity: 1; }
+
+    /* Tab Content Panels */
+    .tab-panel { display: none; flex-direction: column; gap: 14px; }
+    .tab-panel.active { display: flex; }
+
+    /* Color Row (picker + hex + sliders) */
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .color-picker-swatch {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 40px; height: 40px;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      padding: 0;
+      background: none;
+      flex-shrink: 0;
+      transition: border-color 0.2s;
+    }
+    .color-picker-swatch::-webkit-color-swatch-wrapper { padding: 0; }
+    .color-picker-swatch::-webkit-color-swatch { border-radius: 8px; border: none; }
+    .color-picker-swatch::-moz-color-swatch { border-radius: 8px; border: none; }
+    .color-hex {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      min-width: 70px;
+    }
+
+    /* Sliders */
+    .sliders {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+      min-width: 150px;
+    }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .slider-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      width: 16px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .slider-label.r { color: #ef4444; }
+    .slider-label.g { color: #22c55e; }
+    .slider-label.b { color: #3b82f6; }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--slider-track);
+      outline: none;
+      transition: background 0.15s;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 2px solid var(--slider-fill);
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 2px solid var(--slider-fill);
+      cursor: pointer;
+      box-shadow: none;
+    }
+    .slider-value {
+      font-size: 0.75rem;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      color: var(--text-tertiary);
+      width: 28px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    /* Section label */
+    .section-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: -4px;
+    }
+
+    /* Direction Buttons */
+    .direction-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .dir-btn {
+      padding: 10px;
+      font-size: 1.1rem;
+      text-align: center;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      background: var(--card-bg);
+      color: var(--text);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .dir-btn:hover { background: var(--card-hover); }
+    .dir-btn.selected { border-color: var(--accent); background: var(--card-hover); }
+
+    /* Special Preset Cards */
+    .presets-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .preset-card {
+      aspect-ratio: 1.4;
+      border-radius: 16px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+    .preset-card:hover { transform: scale(1.03); }
+    .preset-card.selected { border-color: var(--accent); }
+    .preset-card .preset-name {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      padding: 6px 8px;
+      font-size: 0.7rem;
+      text-align: center;
+      background: rgba(0,0,0,0.45);
+      color: #fff;
+      border-radius: 0 0 14px 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Random Button */
+    .random-btn {
+      width: 100%;
+      padding: 12px;
+      font-size: 1rem;
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      background: var(--card-bg);
+      color: var(--text);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .random-btn:hover { border-color: var(--accent); background: var(--card-hover); }
+
+    /* Buttons */
+    .btn-download {
+      width: 100%;
+      padding: 16px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 24px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s, opacity 0.2s;
+    }
+    .btn-download:hover:not(:disabled) { background: var(--accent-hover); }
+    .btn-download:active:not(:disabled) { transform: scale(0.98); }
+    .btn-download:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .btn-download.success {
+      background: var(--success);
+    }
+
+    .btn-reset {
+      width: 100%;
+      padding: 10px;
+      font-size: 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .btn-reset:hover { background: var(--card-hover); color: var(--text); }
+
+    /* ===== Mobile Save Modal ===== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--overlay);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+      animation: fadeIn 0.2s;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal-dialog {
+      background: var(--bg);
+      border-radius: 24px;
+      padding: 24px;
+      max-width: 400px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      animation: slideUp 0.25s;
+    }
+    @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal-dialog img {
+      width: 100%;
+      border-radius: 16px;
+      display: block;
+    }
+    .modal-dialog .modal-hint {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+    .modal-dialog .modal-actions {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+    .modal-dialog .btn-share,
+    .modal-dialog .btn-close-modal {
+      flex: 1;
+      padding: 12px;
+      font-size: 0.95rem;
+      border: none;
+      border-radius: 20px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .modal-dialog .btn-share {
+      background: var(--accent);
+      color: #fff;
+    }
+    .modal-dialog .btn-share:hover { background: var(--accent-hover); }
+    .modal-dialog .btn-close-modal {
+      background: var(--bg-secondary);
+      color: var(--text);
+    }
+    .modal-dialog .btn-close-modal:hover { background: var(--bg-tertiary); }
+
+    /* ===== Font Error Dialog ===== */
+    .error-dialog {
+      position: fixed;
+      inset: 0;
+      background: var(--overlay);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 20px;
+    }
+    .error-dialog-content {
+      background: var(--bg);
+      border-radius: 24px;
+      padding: 32px 24px;
+      max-width: 360px;
+      width: 100%;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .error-dialog-content .error-icon { font-size: 3rem; }
+    .error-dialog-content p { color: var(--text-secondary); line-height: 1.5; }
+    .error-dialog-content button {
+      padding: 12px 32px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 20px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    .error-dialog-content button:hover { background: var(--accent-hover); }
+
+    /* ===== Utility ===== */
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>开源头像生成器</h1>
+  <p class="author">作者：大卷</p>
+</header>
+
+<main>
+  <!-- Preview -->
+  <section class="preview-section">
+    <div class="preview-wrapper" id="preview-wrapper">
+      <canvas id="preview-canvas" width="512" height="512"></canvas>
+      <div class="preview-loading" id="preview-loading">
+        <div class="spinner"></div>
+        <p>字体加载中...</p>
+      </div>
+    </div>
+    <p class="current-scheme" id="current-scheme"></p>
+  </section>
+
+  <!-- Controls -->
+  <section class="controls-section">
+    <!-- Name -->
+    <div class="control-group">
+      <label for="name-input">名字（必须两个字）</label>
+      <input type="text" id="name-input" maxlength="2" placeholder="请输入两个字" autocomplete="off">
+      <p class="name-hint" id="name-hint">输入不足两个字时不可下载</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="solid">纯色<span class="tab-dot" id="dot-solid">●</span></button>
+      <button class="tab" data-tab="gradient">渐变<span class="tab-dot" id="dot-gradient">●</span></button>
+      <button class="tab" data-tab="special">特殊方案<span class="tab-dot" id="dot-special">●</span></button>
+    </div>
+
+    <!-- Solid Tab -->
+    <div class="tab-panel active" id="panel-solid">
+      <div class="color-row">
+        <input type="color" class="color-picker-swatch" id="solid-picker" value="#3B82F6">
+        <span class="color-hex" id="solid-hex">#3B82F6</span>
+      </div>
+      <div class="sliders">
+        <div class="slider-row">
+          <span class="slider-label r">R</span>
+          <input type="range" id="solid-r" min="0" max="255" value="59">
+          <span class="slider-value" id="solid-r-val">59</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label g">G</span>
+          <input type="range" id="solid-g" min="0" max="255" value="130">
+          <span class="slider-value" id="solid-g-val">130</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label b">B</span>
+          <input type="range" id="solid-b" min="0" max="255" value="246">
+          <span class="slider-value" id="solid-b-val">246</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gradient Tab -->
+    <div class="tab-panel" id="panel-gradient">
+      <p class="section-label">起始颜色</p>
+      <div class="color-row">
+        <input type="color" class="color-picker-swatch" id="grad-start-picker" value="#3B82F6">
+        <span class="color-hex" id="grad-start-hex">#3B82F6</span>
+      </div>
+      <div class="sliders">
+        <div class="slider-row">
+          <span class="slider-label r">R</span>
+          <input type="range" id="grad-start-r" min="0" max="255" value="59">
+          <span class="slider-value" id="grad-start-r-val">59</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label g">G</span>
+          <input type="range" id="grad-start-g" min="0" max="255" value="130">
+          <span class="slider-value" id="grad-start-g-val">130</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label b">B</span>
+          <input type="range" id="grad-start-b" min="0" max="255" value="246">
+          <span class="slider-value" id="grad-start-b-val">246</span>
+        </div>
+      </div>
+      <p class="section-label">结束颜色</p>
+      <div class="color-row">
+        <input type="color" class="color-picker-swatch" id="grad-end-picker" value="#8B5CF6">
+        <span class="color-hex" id="grad-end-hex">#8B5CF6</span>
+      </div>
+      <div class="sliders">
+        <div class="slider-row">
+          <span class="slider-label r">R</span>
+          <input type="range" id="grad-end-r" min="0" max="255" value="139">
+          <span class="slider-value" id="grad-end-r-val">139</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label g">G</span>
+          <input type="range" id="grad-end-g" min="0" max="255" value="92">
+          <span class="slider-value" id="grad-end-g-val">92</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label b">B</span>
+          <input type="range" id="grad-end-b" min="0" max="255" value="246">
+          <span class="slider-value" id="grad-end-b-val">246</span>
+        </div>
+      </div>
+      <p class="section-label">渐变方向</p>
+      <div class="direction-grid" id="direction-grid">
+        <button class="dir-btn" data-angle="0">↑</button>
+        <button class="dir-btn" data-angle="45">↗</button>
+        <button class="dir-btn" data-angle="90">→</button>
+        <button class="dir-btn" data-angle="135">↘</button>
+        <button class="dir-btn" data-angle="180">↓</button>
+        <button class="dir-btn" data-angle="225">↙</button>
+        <button class="dir-btn" data-angle="270">←</button>
+        <button class="dir-btn selected" data-angle="315">↖</button>
+      </div>
+    </div>
+
+    <!-- Special Tab -->
+    <div class="tab-panel" id="panel-special">
+      <button class="random-btn" id="random-btn">🎲 随机配色</button>
+      <div class="presets-grid" id="presets-grid">
+        <!-- Generated by JS -->
+      </div>
+    </div>
+
+    <!-- Text Color -->
+    <div class="control-group">
+      <label>文字颜色</label>
+      <div class="color-row">
+        <input type="color" class="color-picker-swatch" id="text-picker" value="#FFFFFF">
+        <span class="color-hex" id="text-hex">#FFFFFF</span>
+      </div>
+      <div class="sliders">
+        <div class="slider-row">
+          <span class="slider-label r">R</span>
+          <input type="range" id="text-r" min="0" max="255" value="255">
+          <span class="slider-value" id="text-r-val">255</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label g">G</span>
+          <input type="range" id="text-g" min="0" max="255" value="255">
+          <span class="slider-value" id="text-g-val">255</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label b">B</span>
+          <input type="range" id="text-b" min="0" max="255" value="255">
+          <span class="slider-value" id="text-b-val">255</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Download -->
+    <button class="btn-download" id="btn-download" disabled>⬇ 下载头像</button>
+
+    <!-- Reset -->
+    <button class="btn-reset" id="btn-reset">↺ 恢复默认</button>
+  </section>
+</main>
+
+<!-- Mobile Save Modal (hidden by default) -->
+<div class="modal-overlay hidden" id="save-modal">
+  <div class="modal-dialog">
+    <img id="save-modal-img" alt="头像预览">
+    <p class="modal-hint">长按图片保存到相册</p>
+    <div class="modal-actions">
+      <button class="btn-share" id="btn-share">📤 分享</button>
+      <button class="btn-close-modal" id="btn-close-modal">✕ 关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- Font Error Dialog (hidden by default) -->
+<div class="error-dialog hidden" id="font-error">
+  <div class="error-dialog-content">
+    <span class="error-icon">⚠️</span>
+    <p>字体加载失败<br>请刷新页面重试</p>
+    <button onclick="location.reload()">刷新</button>
+  </div>
+</div>
+
+<script>
+/* ===================================================================
+   Adjustable Constants (not exposed in UI)
+   Change these values to tune spacing, size, weight, and quality
+   =================================================================== */
+const FONT_FAMILY = '"Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif';
+const FONT_WEIGHT = 500;        // CSS font-weight (500 = Medium)
+const FONT_SIZE = 339;          // px, at 1024 reference resolution (280 × 1.1 × 1.1)
+const LETTER_SPACING = 5;       // px, at 1024 reference resolution (reduced to keep margins)
+const EXPORT_SIZE = 1024;       // final JPG size
+const PREVIEW_SIZE = 512;       // preview canvas internal size
+const JPEG_QUALITY = 0.92;      // export quality
+
+/* ===================================================================
+   Special Preset Gradients (15 curated schemes + categories)
+   =================================================================== */
+const SPECIAL_PRESETS = [
+  // 自然风光
+  { name: '海洋微风', colors: ['#4facfe', '#00f2fe'], angle: 135, group: '自然风光' },
+  { name: '日落暖阳', colors: ['#f6d365', '#fda085'], angle: 180, group: '自然风光' },
+  { name: '森林绿意', colors: ['#11998e', '#38ef7d'], angle: 135, group: '自然风光' },
+  { name: '极光梦幻', colors: ['#a18cd1', '#fbc2eb'], angle: 135, group: '自然风光' },
+  // 活泼鲜艳
+  { name: '火焰烈阳', colors: ['#ff0844', '#ff8c00'], angle: 180, group: '活泼鲜艳' },
+  { name: '霓虹都市', colors: ['#f953c6', '#b91d73'], angle: 225, group: '活泼鲜艳' },
+  { name: '糖果乐园', colors: ['#a1c4fd', '#c2e9fb'], angle: 135, group: '活泼鲜艳' },
+  { name: '热带风情', colors: ['#f3ec78', '#af4261'], angle: 225, group: '活泼鲜艳' },
+  // 沉稳优雅
+  { name: '墨蓝深海', colors: ['#0c3483', '#a2b6df'], angle: 180, group: '沉稳优雅' },
+  { name: '暮光紫韵', colors: ['#6a11cb', '#2575fc'], angle: 135, group: '沉稳优雅' },
+  { name: '薰衣草田', colors: ['#c471f5', '#fa71cd'], angle: 135, group: '沉稳优雅' },
+  { name: '午夜城市', colors: ['#2b5876', '#4e4376'], angle: 180, group: '沉稳优雅' },
+  // 品牌灵感
+  { name: 'Instagram风', colors: ['#f09433', '#bc1888'], angle: 45, group: '品牌灵感' },
+  { name: '经典蓝紫', colors: ['#4facfe', '#8b5cf6'], angle: 135, group: '品牌灵感' },
+  { name: '薄荷清蓝', colors: ['#84fab0', '#8fd3f4'], angle: 135, group: '品牌灵感' },
+];
+
+/* ===================================================================
+   Default State
+   =================================================================== */
+const DEFAULTS = {
+  name: '',
+  bgMode: 'solid',     // 'solid' | 'gradient' | 'special'
+  solidColor:    { r: 59,  g: 130, b: 246 },  // #3B82F6
+  gradStart:     { r: 59,  g: 130, b: 246 },  // #3B82F6
+  gradEnd:       { r: 139, g: 92,  b: 246 },  // #8B5CF6
+  gradAngle: 315,
+  specialIndex: -1,
+  textColor:     { r: 255, g: 255, b: 255 },
+};
+
+// Current state (mutable)
+let state = { ...DEFAULTS, solidColor: {...DEFAULTS.solidColor}, gradStart: {...DEFAULTS.gradStart}, gradEnd: {...DEFAULTS.gradEnd}, textColor: {...DEFAULTS.textColor} };
+
+// Sync flag to prevent event loops
+let isUpdating = false;
+
+// Track whether font is loaded
+let fontReady = false;
+
+/* ===================================================================
+   DOM References
+   =================================================================== */
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+const previewCanvas = $('#preview-canvas');
+const previewCtx = previewCanvas.getContext('2d');
+const previewLoading = $('#preview-loading');
+const currentSchemeEl = $('#current-scheme');
+const nameInput = $('#name-input');
+const nameHint = $('#name-hint');
+const btnDownload = $('#btn-download');
+const saveModal = $('#save-modal');
+const saveModalImg = $('#save-modal-img');
+const fontError = $('#font-error');
+
+/* ===================================================================
+   Utilities
+   =================================================================== */
+function rgbToHex(r, g, b) {
+  return '#' + [r, g, b].map(x => Math.round(x).toString(16).padStart(2, '0')).join('');
+}
+
+function hexToRgb(hex) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 0, g: 0, b: 0 };
+}
+
+function rgbStr(c) { return `rgb(${Math.round(c.r)},${Math.round(c.g)},${Math.round(c.b)})`; }
+
+function isTouchDevice() {
+  return window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+/* ===================================================================
+   Canvas Drawing
+   =================================================================== */
+function createGradientFromAngle(ctx, angle, startColor, endColor, w, h) {
+  const rad = (angle - 90) * Math.PI / 180;
+  const cx = w / 2, cy = h / 2;
+  const halfDiag = Math.sqrt(w * w + h * h) / 2;
+  const x1 = cx - Math.cos(rad) * halfDiag;
+  const y1 = cy - Math.sin(rad) * halfDiag;
+  const x2 = cx + Math.cos(rad) * halfDiag;
+  const y2 = cy + Math.sin(rad) * halfDiag;
+  const grad = ctx.createLinearGradient(x1, y1, x2, y2);
+  grad.addColorStop(0, startColor);
+  grad.addColorStop(1, endColor);
+  return grad;
+}
+
+function drawAvatar(canvas, size, config) {
+  const ctx = canvas.getContext('2d');
+  const scale = size / EXPORT_SIZE;
+  const fontSize = config.fontSize * scale;
+  const letterSpacing = config.letterSpacing * scale;
+
+  // Clear & draw background
+  ctx.clearRect(0, 0, size, size);
+
+  // Determine background
+  let bgStyle;
+  if (config.bgMode === 'solid') {
+    bgStyle = rgbStr(config.solidColor);
+    ctx.fillStyle = bgStyle;
+    ctx.fillRect(0, 0, size, size);
+  } else {
+    // gradient or special
+    let startColor, endColor, angle;
+    if (config.bgMode === 'gradient') {
+      startColor = rgbStr(config.gradStart);
+      endColor = rgbStr(config.gradEnd);
+      angle = config.gradAngle;
+    } else {
+      // special preset
+      const preset = SPECIAL_PRESETS[config.specialIndex];
+      if (preset) {
+        startColor = preset.colors[0];
+        endColor = preset.colors[1];
+        angle = preset.angle;
+      } else {
+        // fallback to gradient params
+        startColor = rgbStr(config.gradStart);
+        endColor = rgbStr(config.gradEnd);
+        angle = config.gradAngle;
+      }
+    }
+    const grad = createGradientFromAngle(ctx, angle, startColor, endColor, size, size);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+  }
+
+  // Draw text
+  const text = config.name || '';
+  if (text.length > 0) {
+    ctx.fillStyle = rgbStr(config.textColor);
+    ctx.font = `${FONT_WEIGHT} ${fontSize}px ${FONT_FAMILY}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const cy = size / 2;
+    if (text.length === 1) {
+      // Single character: just center it
+      ctx.fillText(text, size / 2, cy);
+    } else if (text.length >= 2) {
+      // Two (or more) characters: measure and position with spacing
+      const chars = text.split('');
+      const charWidths = chars.map(c => ctx.measureText(c).width);
+      // For exactly two characters
+      const c0w = charWidths[0];
+      const c1w = charWidths[1];
+      const totalWidth = c0w + letterSpacing + c1w;
+      const startX = (size - totalWidth) / 2;
+      // Draw first char
+      ctx.textAlign = 'left';
+      ctx.fillText(chars[0], startX, cy);
+      // Draw second char
+      ctx.fillText(chars[1], startX + c0w + letterSpacing, cy);
+    }
+  }
+
+  return ctx;
+}
+
+/* ===================================================================
+   Preview Update
+   =================================================================== */
+function getActiveConfig() {
+  return {
+    name: state.name,
+    bgMode: state.bgMode,
+    solidColor: state.solidColor,
+    gradStart: state.gradStart,
+    gradEnd: state.gradEnd,
+    gradAngle: state.gradAngle,
+    specialIndex: state.specialIndex,
+    textColor: state.textColor,
+    fontSize: FONT_SIZE,
+    letterSpacing: LETTER_SPACING,
+  };
+}
+
+function updatePreview() {
+  drawAvatar(previewCanvas, PREVIEW_SIZE, getActiveConfig());
+  updateSchemeLabel();
+  updateDownloadButton();
+}
+
+function updateSchemeLabel() {
+  if (state.bgMode === 'special' && state.specialIndex >= 0 && state.specialIndex < SPECIAL_PRESETS.length) {
+    currentSchemeEl.textContent = '当前：' + SPECIAL_PRESETS[state.specialIndex].name;
+  } else if (state.bgMode === 'gradient') {
+    currentSchemeEl.textContent = '当前：自定义渐变';
+  } else {
+    currentSchemeEl.textContent = '当前：纯色背景';
+  }
+}
+
+function updateDownloadButton() {
+  const name = state.name.trim();
+  if (name.length === 2) {
+    btnDownload.disabled = false;
+    nameHint.textContent = '✓ 可以下载';
+    nameHint.style.color = 'var(--success)';
+  } else {
+    btnDownload.disabled = true;
+    if (name.length === 0) {
+      nameHint.textContent = '输入不足两个字时不可下载';
+    } else {
+      nameHint.textContent = `已输入 ${name.length} 个字，需要 2 个字`;
+    }
+    nameHint.style.color = 'var(--text-tertiary)';
+  }
+}
+
+/* ===================================================================
+   Sync color picker ↔ sliders
+   =================================================================== */
+function bindColorGroup(pickerId, rId, gId, bId, hexId, rValId, gValId, bValId, onChange) {
+  const picker = $(pickerId);
+  const rSlider = $(rId);
+  const gSlider = $(gId);
+  const bSlider = $(bId);
+  const hexEl = $(hexId);
+  const rVal = $(rValId);
+  const gVal = $(gValId);
+  const bVal = $(bValId);
+
+  function setSlidersFromHex(hex) {
+    const c = hexToRgb(hex);
+    rSlider.value = c.r; gSlider.value = c.g; bSlider.value = c.b;
+    rVal.textContent = c.r; gVal.textContent = c.g; bVal.textContent = c.b;
+  }
+
+  function setPickerFromSliders() {
+    const r = +rSlider.value, g = +gSlider.value, b = +bSlider.value;
+    const hex = rgbToHex(r, g, b);
+    if (picker.value !== hex) picker.value = hex;
+    hexEl.textContent = hex;
+    rVal.textContent = r; gVal.textContent = g; bVal.textContent = b;
+  }
+
+  picker.addEventListener('input', () => {
+    if (isUpdating) return;
+    isUpdating = true;
+    setSlidersFromHex(picker.value);
+    hexEl.textContent = picker.value;
+    isUpdating = false;
+    onChange();
+  });
+
+  [rSlider, gSlider, bSlider].forEach(s => {
+    s.addEventListener('input', () => {
+      if (isUpdating) return;
+      isUpdating = true;
+      setPickerFromSliders();
+      isUpdating = false;
+      onChange();
+    });
+  });
+
+  return { setSlidersFromHex, setPickerFromSliders, setAll: (r, g, b) => {
+    rSlider.value = r; gSlider.value = g; bSlider.value = b;
+    setPickerFromSliders();
+  }};
+}
+
+/* ===================================================================
+   Tab Switching
+   =================================================================== */
+function setActiveTab(tabName) {
+  // Update tab buttons
+  $$('.tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tabName);
+  });
+  // Update panels
+  $$('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'panel-' + tabName);
+  });
+  // Update mode dots
+  updateModeDots();
+}
+
+function updateModeDots() {
+  $('#dot-solid').classList.toggle('show', state.bgMode === 'solid');
+  $('#dot-gradient').classList.toggle('show', state.bgMode === 'gradient');
+  $('#dot-special').classList.toggle('show', state.bgMode === 'special');
+}
+
+$$('.tab').forEach(tab => {
+  tab.addEventListener('click', () => setActiveTab(tab.dataset.tab));
+});
+
+/* ===================================================================
+   Gradient Direction Buttons
+   =================================================================== */
+$$('#direction-grid .dir-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $$('#direction-grid .dir-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    state.gradAngle = parseInt(btn.dataset.angle);
+    state.bgMode = 'gradient';
+    updateModeDots();
+    updatePreview();
+    saveState();
+  });
+});
+
+/* ===================================================================
+   Special Presets Grid
+   =================================================================== */
+function buildPresetCards() {
+  const grid = $('#presets-grid');
+  grid.innerHTML = '';
+  SPECIAL_PRESETS.forEach((preset, idx) => {
+    const card = document.createElement('div');
+    card.className = 'preset-card';
+    card.style.background = `linear-gradient(${preset.angle}deg, ${preset.colors[0]}, ${preset.colors[1]})`;
+    if (state.bgMode === 'special' && state.specialIndex === idx) {
+      card.classList.add('selected');
+    }
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'preset-name';
+    nameSpan.textContent = preset.name;
+    card.appendChild(nameSpan);
+
+    card.addEventListener('click', () => {
+      state.bgMode = 'special';
+      state.specialIndex = idx;
+      // Apply preset gradient to gradient settings too (for reference in gradient tab)
+      const sc = hexToRgb(preset.colors[0]);
+      const ec = hexToRgb(preset.colors[1]);
+      state.gradStart = sc;
+      state.gradEnd = ec;
+      state.gradAngle = preset.angle;
+      // Update gradient tab UI
+      gradStartBind.setAll(sc.r, sc.g, sc.b);
+      gradEndBind.setAll(ec.r, ec.g, ec.b);
+      $$('#direction-grid .dir-btn').forEach(b => {
+        b.classList.toggle('selected', parseInt(b.dataset.angle) === preset.angle);
+      });
+      // Update preset selection visual
+      $$('.preset-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      updateModeDots();
+      updatePreview();
+      saveState();
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+// Random button
+$('#random-btn').addEventListener('click', () => {
+  const r1 = Math.floor(Math.random() * 256);
+  const g1 = Math.floor(Math.random() * 256);
+  const b1 = Math.floor(Math.random() * 256);
+  const r2 = Math.floor(Math.random() * 256);
+  const g2 = Math.floor(Math.random() * 256);
+  const b2 = Math.floor(Math.random() * 256);
+  const angle = Math.floor(Math.random() * 360);
+  const tr = Math.floor(Math.random() * 256);
+  const tg = Math.floor(Math.random() * 256);
+  const tb = Math.floor(Math.random() * 256);
+
+  state.bgMode = 'gradient';
+  state.gradStart = { r: r1, g: g1, b: b1 };
+  state.gradEnd = { r: r2, g: g2, b: b2 };
+  state.gradAngle = angle;
+  state.textColor = { r: tr, g: tg, b: tb };
+  state.specialIndex = -1;
+
+  // Update UI
+  gradStartBind.setAll(r1, g1, b1);
+  gradEndBind.setAll(r2, g2, b2);
+  textBind.setAll(tr, tg, tb);
+  $$('#direction-grid .dir-btn').forEach(b => {
+    b.classList.toggle('selected', parseInt(b.dataset.angle) === angle);
+  });
+  $$('.preset-card').forEach(c => c.classList.remove('selected'));
+  setActiveTab('special');
+  updateModeDots();
+  updatePreview();
+  saveState();
+});
+
+/* ===================================================================
+   Download Logic
+   =================================================================== */
+function getExportBlob() {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = EXPORT_SIZE;
+    canvas.height = EXPORT_SIZE;
+    drawAvatar(canvas, EXPORT_SIZE, getActiveConfig());
+    canvas.toBlob(blob => resolve(blob), 'image/jpeg', JPEG_QUALITY);
+  });
+}
+
+function downloadFile(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function showSaveModal(imgUrl) {
+  saveModalImg.src = imgUrl;
+  saveModal.classList.remove('hidden');
+}
+
+function hideSaveModal() {
+  saveModal.classList.add('hidden');
+  // Revoke object URL if exists
+  if (saveModal._objectUrl) {
+    URL.revokeObjectURL(saveModal._objectUrl);
+    saveModal._objectUrl = null;
+  }
+}
+
+$('#btn-close-modal').addEventListener('click', hideSaveModal);
+saveModal.addEventListener('click', (e) => {
+  if (e.target === saveModal) hideSaveModal();
+});
+
+$('#btn-share').addEventListener('click', async () => {
+  if (!saveModal._blob) return;
+  if (navigator.share && navigator.canShare) {
+    const file = new File([saveModal._blob], `头像-${state.name.trim()}.jpg`, { type: 'image/jpeg' });
+    const data = { files: [file] };
+    if (navigator.canShare(data)) {
+      try {
+        await navigator.share(data);
+        return;
+      } catch (e) { /* fall through */ }
+    }
+  }
+  // Fallback: show alert
+  alert('请长按图片保存到相册');
+});
+
+btnDownload.addEventListener('click', async () => {
+  const name = state.name.trim();
+  if (name.length !== 2) return;
+
+  btnDownload.textContent = '⏳ 生成中...';
+  btnDownload.disabled = true;
+
+  const blob = await getExportBlob();
+
+  if (isTouchDevice()) {
+    // Mobile: show modal
+    const url = URL.createObjectURL(blob);
+    saveModal._objectUrl = url;
+    saveModal._blob = blob;
+    showSaveModal(url);
+    btnDownload.textContent = '⬇ 下载头像';
+    btnDownload.disabled = false;
+  } else {
+    // Desktop: direct download
+    downloadFile(blob, `头像-${name}.jpg`);
+    btnDownload.textContent = '✅ 已下载';
+    btnDownload.classList.add('success');
+    setTimeout(() => {
+      btnDownload.textContent = '⬇ 下载头像';
+      btnDownload.classList.remove('success');
+      btnDownload.disabled = false;
+    }, 1500);
+  }
+});
+
+/* ===================================================================
+   Reset
+   =================================================================== */
+$('#btn-reset').addEventListener('click', () => {
+  state = {
+    ...DEFAULTS,
+    solidColor: {...DEFAULTS.solidColor},
+    gradStart: {...DEFAULTS.gradStart},
+    gradEnd: {...DEFAULTS.gradEnd},
+    textColor: {...DEFAULTS.textColor},
+  };
+  // Reset name input
+  nameInput.value = '';
+  // Reset UI controls
+  solidBind.setAll(state.solidColor.r, state.solidColor.g, state.solidColor.b);
+  gradStartBind.setAll(state.gradStart.r, state.gradStart.g, state.gradStart.b);
+  gradEndBind.setAll(state.gradEnd.r, state.gradEnd.g, state.gradEnd.b);
+  textBind.setAll(state.textColor.r, state.textColor.g, state.textColor.b);
+  $$('#direction-grid .dir-btn').forEach(b => {
+    b.classList.toggle('selected', parseInt(b.dataset.angle) === state.gradAngle);
+  });
+  $$('.preset-card').forEach(c => c.classList.remove('selected'));
+  setActiveTab('solid');
+  updateModeDots();
+  updatePreview();
+  saveState();
+  localStorage.removeItem('avatar-generator-state');
+});
+
+/* ===================================================================
+   localStorage Persistence
+   =================================================================== */
+function saveState() {
+  try {
+    const toSave = {
+      name: state.name,
+      bgMode: state.bgMode,
+      solidColor: state.solidColor,
+      gradStart: state.gradStart,
+      gradEnd: state.gradEnd,
+      gradAngle: state.gradAngle,
+      specialIndex: state.specialIndex,
+      textColor: state.textColor,
+    };
+    localStorage.setItem('avatar-generator-state', JSON.stringify(toSave));
+  } catch (e) { /* quota exceeded or similar, silently ignore */ }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem('avatar-generator-state');
+    if (!raw) return false;
+    const saved = JSON.parse(raw);
+    // Merge saved state (with validation)
+    if (saved.solidColor && typeof saved.solidColor.r === 'number') {
+      state.solidColor = saved.solidColor;
+    }
+    if (saved.gradStart && typeof saved.gradStart.r === 'number') {
+      state.gradStart = saved.gradStart;
+    }
+    if (saved.gradEnd && typeof saved.gradEnd.r === 'number') {
+      state.gradEnd = saved.gradEnd;
+    }
+    if (saved.textColor && typeof saved.textColor.r === 'number') {
+      state.textColor = saved.textColor;
+    }
+    if (typeof saved.gradAngle === 'number') state.gradAngle = saved.gradAngle;
+    if (typeof saved.specialIndex === 'number') state.specialIndex = saved.specialIndex;
+    if (saved.bgMode && ['solid', 'gradient', 'special'].includes(saved.bgMode)) {
+      state.bgMode = saved.bgMode;
+    }
+    if (typeof saved.name === 'string') state.name = saved.name;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function applyLoadedState() {
+  // Apply state to UI
+  solidBind.setAll(state.solidColor.r, state.solidColor.g, state.solidColor.b);
+  gradStartBind.setAll(state.gradStart.r, state.gradStart.g, state.gradStart.b);
+  gradEndBind.setAll(state.gradEnd.r, state.gradEnd.g, state.gradEnd.b);
+  textBind.setAll(state.textColor.r, state.textColor.g, state.textColor.b);
+  nameInput.value = state.name;
+
+  // Gradient angle button
+  $$('#direction-grid .dir-btn').forEach(b => {
+    b.classList.toggle('selected', parseInt(b.dataset.angle) === state.gradAngle);
+  });
+
+  // Active tab
+  setActiveTab(state.bgMode);
+
+  // Preset selection
+  if (state.bgMode === 'special' && state.specialIndex >= 0) {
+    const cards = $$('.preset-card');
+    cards.forEach((c, i) => c.classList.toggle('selected', i === state.specialIndex));
+  }
+
+  updateModeDots();
+  updatePreview();
+}
+
+/* ===================================================================
+   Font Loading
+   =================================================================== */
+async function initFont() {
+  try {
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('font-timeout')), 8000)
+    );
+    await Promise.race([
+      document.fonts.load(`${FONT_WEIGHT} 1px "Noto Sans SC"`),
+      timeout,
+    ]);
+    // Verify font actually loaded
+    const fonts = document.fonts;
+    const notoLoaded = fonts.check(`${FONT_WEIGHT} 16px "Noto Sans SC"`);
+    if (!notoLoaded) throw new Error('font-not-found');
+    fontReady = true;
+  } catch (e) {
+    console.warn('Font load failed:', e.message);
+    fontError.classList.remove('hidden');
+    // Still mark ready so user can use fallback font
+    fontReady = true;
+  }
+  // Hide loading
+  previewLoading.classList.add('hidden');
+  // Enable controls
+  updatePreview();
+}
+
+/* ===================================================================
+   Init
+   =================================================================== */
+function initControls() {
+  // Bind color groups
+  window.solidBind = bindColorGroup(
+    '#solid-picker', '#solid-r', '#solid-g', '#solid-b',
+    '#solid-hex', '#solid-r-val', '#solid-g-val', '#solid-b-val',
+    () => {
+      state.solidColor = { r: +$('#solid-r').value, g: +$('#solid-g').value, b: +$('#solid-b').value };
+      state.bgMode = 'solid';
+      state.specialIndex = -1;
+      $$('.preset-card').forEach(c => c.classList.remove('selected'));
+      updateModeDots();
+      updatePreview();
+      saveState();
+    }
+  );
+
+  window.gradStartBind = bindColorGroup(
+    '#grad-start-picker', '#grad-start-r', '#grad-start-g', '#grad-start-b',
+    '#grad-start-hex', '#grad-start-r-val', '#grad-start-g-val', '#grad-start-b-val',
+    () => {
+      state.gradStart = { r: +$('#grad-start-r').value, g: +$('#grad-start-g').value, b: +$('#grad-start-b').value };
+      state.bgMode = 'gradient';
+      state.specialIndex = -1;
+      $$('.preset-card').forEach(c => c.classList.remove('selected'));
+      updateModeDots();
+      updatePreview();
+      saveState();
+    }
+  );
+
+  window.gradEndBind = bindColorGroup(
+    '#grad-end-picker', '#grad-end-r', '#grad-end-g', '#grad-end-b',
+    '#grad-end-hex', '#grad-end-r-val', '#grad-end-g-val', '#grad-end-b-val',
+    () => {
+      state.gradEnd = { r: +$('#grad-end-r').value, g: +$('#grad-end-g').value, b: +$('#grad-end-b').value };
+      state.bgMode = 'gradient';
+      state.specialIndex = -1;
+      $$('.preset-card').forEach(c => c.classList.remove('selected'));
+      updateModeDots();
+      updatePreview();
+      saveState();
+    }
+  );
+
+  window.textBind = bindColorGroup(
+    '#text-picker', '#text-r', '#text-g', '#text-b',
+    '#text-hex', '#text-r-val', '#text-g-val', '#text-b-val',
+    () => {
+      state.textColor = { r: +$('#text-r').value, g: +$('#text-g').value, b: +$('#text-b').value };
+      updatePreview();
+      saveState();
+    }
+  );
+
+  // Name input
+  nameInput.addEventListener('input', () => {
+    state.name = nameInput.value.trim();
+    updatePreview();
+    saveState();
+  });
+
+  // Build preset cards
+  buildPresetCards();
+}
+
+function generateFavicon() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 32; canvas.height = 32;
+  const ctx = canvas.getContext('2d');
+  // Draw the default avatar as favicon
+  ctx.fillStyle = '#3B82F6';
+  ctx.fillRect(0, 0, 32, 32);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '500 16px "Noto Sans SC", "PingFang SC", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('头像', 16, 16);
+  const link = document.createElement('link');
+  link.rel = 'icon';
+  link.type = 'image/png';
+  link.href = canvas.toDataURL('image/png');
+  document.head.appendChild(link);
+}
+
+async function init() {
+  initControls();
+  generateFavicon();
+
+  // Load saved state
+  const restored = loadState();
+  applyLoadedState();
+
+  // Initialize font (shows loading spinner, then draws)
+  await initFont();
+
+  // If font failed and state is default, we still have controls enabled
+  if (restored) {
+    applyLoadedState();
+  }
+}
+
+init();
+</script>
+</body>
+</html>
