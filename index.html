@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>开源头像生成器</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.cn/css2?family=Noto+Sans+SC:wght@500&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5/500.css">
   <style>
     /* ===== CSS Variables (Light/ Dark follow system) ===== */
     :root {
@@ -1365,28 +1365,26 @@ function applyLoadedState() {
    Font Loading
    =================================================================== */
 async function initFont() {
+  // Try to load Noto Sans SC from CDN; silently fall back to system font
   try {
     const timeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('font-timeout')), 20000)
+      setTimeout(() => reject(new Error('font-timeout')), 15000)
     );
     await Promise.race([
       document.fonts.load(`${FONT_WEIGHT} 1px "Noto Sans SC"`),
       timeout,
     ]);
-    // Verify font actually loaded
-    const fonts = document.fonts;
-    const notoLoaded = fonts.check(`${FONT_WEIGHT} 16px "Noto Sans SC"`);
-    if (!notoLoaded) throw new Error('font-not-found');
-    fontReady = true;
+    const loaded = document.fonts.check(`${FONT_WEIGHT} 16px "Noto Sans SC"`);
+    if (loaded) {
+      fontReady = true;
+      console.log('Noto Sans SC loaded from CDN');
+    }
   } catch (e) {
-    console.warn('Font load failed:', e.message);
-    fontError.classList.remove('hidden');
-    // Still mark ready so user can use fallback font
-    fontReady = true;
+    console.warn('Font CDN unreachable, using system font fallback');
   }
-  // Hide loading
+  fontReady = true;
+  // Hide loading spinner
   previewLoading.classList.add('hidden');
-  // Enable controls
   updatePreview();
 }
 
