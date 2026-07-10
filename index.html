@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>开源头像生成器</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5/500.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.cn/css2?family=Noto+Sans+SC:wght@500&display=swap">
   <style>
     /* ===== CSS Variables (Light/ Dark follow system) ===== */
     :root {
@@ -1367,7 +1367,7 @@ function applyLoadedState() {
 async function initFont() {
   try {
     const timeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('font-timeout')), 8000)
+      setTimeout(() => reject(new Error('font-timeout')), 20000)
     );
     await Promise.race([
       document.fonts.load(`${FONT_WEIGHT} 1px "Noto Sans SC"`),
