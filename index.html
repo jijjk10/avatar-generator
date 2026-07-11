@@ -764,7 +764,7 @@
    =================================================================== */
 const FONT_FAMILY = '"Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif';
 const FONT_WEIGHT = 500;        // CSS font-weight (500 = Medium)
-const FONT_SIZE = 339;          // px, at 1024 reference resolution (280 × 1.1 × 1.1)
+const FONT_SIZE = 356;          // px, at 1024 reference resolution (339 × 1.05)
 const LETTER_SPACING = 5;       // px, at 1024 reference resolution (reduced to keep margins)
 const EXPORT_SIZE = 1024;       // final JPG size
 const PREVIEW_SIZE = 512;       // preview canvas internal size
@@ -921,7 +921,7 @@ function drawAvatar(canvas, size, config) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    const cy = size / 2;
+    const cy = size * 0.45; // shifted up 5% from center
     if (text.length === 1) {
       // Single character: just center it
       ctx.fillText(text, size / 2, cy);
