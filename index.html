@@ -921,7 +921,7 @@ function drawAvatar(canvas, size, config) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    const cy = size * 0.45; // shifted up 5% from center
+    const cy = size / 2;
     if (text.length === 1) {
       // Single character: just center it
       ctx.fillText(text, size / 2, cy);
